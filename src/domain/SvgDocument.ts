@@ -1,5 +1,6 @@
 import { DomainError } from "./errors/DomainError.js";
 import { TREE_MUTATION_TOKEN } from "./internal/TreeMutationToken.js";
+import { StateMemento } from "./memento/StateMemento.js";
 import { Group } from "./shapes/Group.js";
 import { Shape } from "./shapes/Shape.js";
 import { ShapePlacement } from "./tree/ShapePlacement.js";
@@ -31,6 +32,47 @@ export class SvgDocument {
 
   public get elementCount(): number {
     return this.shapesById.size;
+  }
+
+  /** Captures topology and identities, without exposing mutable tree data. */
+  public captureTreeState(): StateMemento {
+    const roots = [...this.rootShapes];
+    const shapes: Shape[] = [];
+    const children = new Map<Group, readonly Shape[]>();
+    this.walk((shape) => {
+      shapes.push(shape);
+      if (shape instanceof Group) children.set(shape, shape.children);
+    });
+
+    return new StateMemento(() => {
+      const groups = new Set(children.keys());
+      this.walk((shape) => {
+        if (shape instanceof Group) groups.add(shape);
+      });
+      // Validate all external ownership before altering any live state.
+      for (const shape of shapes) {
+        if (shape.document !== null && shape.document !== this) {
+          throw new DomainError(`shape belongs to a different document: ${shape.id}`);
+        }
+        if (shape.parent !== null && !groups.has(shape.parent)) {
+          throw new DomainError(`shape belongs to an external container: ${shape.id}`);
+        }
+      }
+
+      for (const root of [...this.rootShapes]) this.deleteShape(root.id);
+      for (const group of groups) {
+        for (const child of group.children) {
+          group.removeExistingChild(child, TREE_MUTATION_TOKEN);
+        }
+      }
+      // Rebuild deepest groups first, then register the finished roots once.
+      for (const [group, savedChildren] of [...children.entries()].reverse()) {
+        for (const child of savedChildren) {
+          group.insertExistingChild(group.children.length, child, TREE_MUTATION_TOKEN);
+        }
+      }
+      for (const root of roots) this.addShape(root);
+    });
   }
 
   public resize(width: number, height: number): void {

@@ -45,6 +45,17 @@ export class Circle extends Shape {
     this.assertFiniteResult(this.cyValue + dy, "cy");
   }
 
+  protected override captureGeometryRestore(): () => void {
+    const cx = this.cxValue;
+    const cy = this.cyValue;
+    const radius = this.radiusValue;
+    return () => {
+      this.cxValue = cx;
+      this.cyValue = cy;
+      this.radiusValue = radius;
+    };
+  }
+
   protected override applyMove(dx: number, dy: number): void {
     this.cxValue += dx;
     this.cyValue += dy;

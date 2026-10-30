@@ -55,6 +55,19 @@ export class Line extends Shape {
     this.assertFiniteResult(this.y2Value + dy, "y2");
   }
 
+  protected override captureGeometryRestore(): () => void {
+    const x1 = this.x1Value;
+    const y1 = this.y1Value;
+    const x2 = this.x2Value;
+    const y2 = this.y2Value;
+    return () => {
+      this.x1Value = x1;
+      this.y1Value = y1;
+      this.x2Value = x2;
+      this.y2Value = y2;
+    };
+  }
+
   protected override applyMove(dx: number, dy: number): void {
     this.x1Value += dx;
     this.y1Value += dy;

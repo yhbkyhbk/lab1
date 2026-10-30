@@ -53,6 +53,19 @@ export class Rect extends Shape {
     this.assertFiniteResult(this.yValue + dy, "y");
   }
 
+  protected override captureGeometryRestore(): () => void {
+    const x = this.xValue;
+    const y = this.yValue;
+    const width = this.widthValue;
+    const height = this.heightValue;
+    return () => {
+      this.xValue = x;
+      this.yValue = y;
+      this.widthValue = width;
+      this.heightValue = height;
+    };
+  }
+
   protected override applyMove(dx: number, dy: number): void {
     this.xValue += dx;
     this.yValue += dy;

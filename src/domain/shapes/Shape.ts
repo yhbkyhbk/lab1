@@ -1,4 +1,5 @@
 import { DomainError } from "../errors/DomainError.js";
+import { StateMemento } from "../memento/StateMemento.js";
 import type { SvgDocument } from "../SvgDocument.js";
 import type { Group } from "./Group.js";
 
@@ -42,6 +43,19 @@ export abstract class Shape {
   }
 
   public abstract get typeName(): string;
+
+  public captureState(): StateMemento {
+    const fill = this.fillValue;
+    const stroke = this.strokeValue;
+    const strokeWidth = this.strokeWidthValue;
+    const restoreGeometry = this.captureGeometryRestore();
+    return new StateMemento(() => {
+      restoreGeometry();
+      this.fillValue = fill;
+      this.strokeValue = stroke;
+      this.strokeWidthValue = strokeWidth;
+    });
+  }
 
   public move(dx: number, dy: number): void {
     this.validateMove(dx, dy);
@@ -145,6 +159,8 @@ export abstract class Shape {
   }
 
   protected abstract validateMoveCore(dx: number, dy: number): void;
+
+  protected abstract captureGeometryRestore(): () => void;
 
   protected abstract applyMove(dx: number, dy: number): void;
 

@@ -126,6 +126,13 @@ export class Group extends Shape {
     }
   }
 
+  protected override captureGeometryRestore(): () => void {
+    const children = this.childShapes.map((child) => child.captureState());
+    return () => {
+      for (const child of children) child.restore();
+    };
+  }
+
   protected override applyMove(dx: number, dy: number): void {
     for (const child of this.childShapes) {
       child.move(dx, dy);

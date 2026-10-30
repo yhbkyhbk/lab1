@@ -53,6 +53,19 @@ export class Ellipse extends Shape {
     this.assertFiniteResult(this.cyValue + dy, "cy");
   }
 
+  protected override captureGeometryRestore(): () => void {
+    const cx = this.cxValue;
+    const cy = this.cyValue;
+    const radiusX = this.radiusXValue;
+    const radiusY = this.radiusYValue;
+    return () => {
+      this.cxValue = cx;
+      this.cyValue = cy;
+      this.radiusXValue = radiusX;
+      this.radiusYValue = radiusY;
+    };
+  }
+
   protected override applyMove(dx: number, dy: number): void {
     this.cxValue += dx;
     this.cyValue += dy;

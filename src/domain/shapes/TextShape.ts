@@ -35,6 +35,17 @@ export class TextShape extends Shape {
     this.assertFiniteResult(this.yValue + dy, "y");
   }
 
+  protected override captureGeometryRestore(): () => void {
+    const x = this.xValue;
+    const y = this.yValue;
+    const text = this.textValue;
+    return () => {
+      this.xValue = x;
+      this.yValue = y;
+      this.textValue = text;
+    };
+  }
+
   protected override applyMove(dx: number, dy: number): void {
     this.xValue += dx;
     this.yValue += dy;
