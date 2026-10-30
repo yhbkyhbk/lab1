@@ -1,6 +1,6 @@
 # SVG 编辑器（CLI）
 
-本文档随实现逐阶段更新。当前已完成阶段 7：要求中的 CLI、编辑、历史与 SVG 文件读写已通过完整会话和边界验收。累计 109 项测试通过，详细证据见[测试报告](TEST_REPORT.md)；最终文档一致性审计和发布标签仍留待阶段 8。
+当前为 Lab1 Phase 1 的最终交付文档：CLI、编辑、历史与 SVG 文件读写已经实现，并完成验收和架构一致性审计。累计 109 项测试通过，详细证据见[测试报告](TEST_REPORT.md)，交付与发布状态见[最终审计](FINAL_AUDIT.md)。最终提交与 `final` 标签保留在本地，由项目所有者完成最后上传。
 
 启动与快速体验：
 
@@ -50,29 +50,35 @@ Get-Content -Encoding UTF8 fixtures/flowchart.commands.txt | node dist/src/main.
 | 组合入口 | `src/main.ts` | 创建并连接各模块对象，不承载业务规则 |
 | 测试 | `test/` | 保存单元测试、集成测试和典型会话回放测试 |
 
-计划中的组件关系如下：
+实际组件关系如下。图的 [PlantUML 源文件](architecture.puml)与下方嵌入源码保持一致；静态 SVG 便览用于直接查看组件关系。
+
+![SVG 编辑器组件依赖](assets/architecture.svg)
 
 ```plantuml
 @startuml
 skinparam componentStyle rectangle
 
 component "CLI\nREPL / Parser / Formatter" as CLI
-component "Application\nCommands / History / Use Cases" as APP
+package "Application" {
+  component "SvgEditor\nCommands / History" as APP
+  interface "SvgStorage" as PORT
+}
 component "Domain\nDocument / Shape / Group" as DOMAIN
-component "Infrastructure\nSVG Reader / Writer" as INFRA
+component "Infrastructure\nSVG Reader / Writer / Files" as INFRA
 component "Composition Root\nmain.ts" as MAIN
 
-CLI --> APP : 调用编辑用例
+CLI --> APP : 编辑用例
 CLI ..> DOMAIN : 只读访问器与 Visitor
-APP --> DOMAIN : 操作领域对象
-INFRA --> DOMAIN : 构造/序列化领域对象
-INFRA ..|> APP : 实现文件访问端口
+APP --> DOMAIN : 领域行为
+APP --> PORT : 同步读写
+INFRA ..|> PORT : 实现端口
+INFRA --> DOMAIN : 构造与序列化
 MAIN --> CLI : 创建
 MAIN --> APP : 组装
 MAIN --> INFRA : 组装
 
 note bottom of DOMAIN
-  不依赖其他业务模块
+  不依赖外层、文件系统或 XML 库
 end note
 @enduml
 ```
@@ -228,15 +234,27 @@ XML 适配器使用 [xmldom 的 DOMParser/XMLSerializer](https://github.com/xmld
 - 4 个固定种子生成 640 条混合输入，519 次成功编辑均逐条撤销/重做，121 次拒绝输入均验证树与历史不变；同时检查全局 id、对象身份、父指针和序列化回环。
 - 使用 `npm ci` 从锁文件重装依赖，再次执行完整覆盖率测试，确认可复现；实际结果和未覆盖范围如实记录在 `doc/TEST_REPORT.md`。
 
+### 阶段 8：最终文档与一致性审计
+
+- 完成仓库首页、主文档、测试报告和最终审计之间的交付导航；补充独立 PlantUML 源文件与组件图静态预览。
+- 把原先“基础设施实现应用层”的简化图细化为真实的 `SvgStorage` 端口实现关系，明确应用层和基础设施之间的依赖倒置。
+- 增加可重复执行的架构检查，扫描生产代码的模块 import、类/文件命名、相对路径、switch 分派和本地 Markdown 链接；人工核对 CLI 只读领域访问及编辑入口。
+- 确认 Git 历史体现分阶段开发，依赖/构建产物/临时预览目录均不进入交付；主文档四个要求章节齐全。
+- 按项目所有者最新要求，本阶段只创建本地最终提交和 `final` 附注标签，不推送；上传命令记录在最终审计中。
+
 ## 一致性自查
 
 ### 模块划分
 
 阶段 1 建立骨架；阶段 2/3 加入领域模型与树结构；阶段 4 加入应用层和 Memento；阶段 5 加入 CLI、工厂、Visitor 与 fixtures；阶段 6 加入计划中的 `infrastructure/svg/` 和 `application/ports/`。`ViewBox/SvgAttributes/ShapeDefinition` 是 IO 阶段的已记录细化。所有类独立成文件，文件名与类名一致。
 
+阶段 7 统一数值语法为 `FiniteNumber`；阶段 8 新增的是 `scripts/` 下的只读审计工具及交付文档。全部目录与方案演进相符，没有未记录的模块变化。
+
 ### 依赖方向
 
 领域层只依赖自身类型；应用层只依赖领域对象和自身端口；基础设施层实现应用端口并构造/读取领域对象；CLI 负责 readline、命令语法和输出。main.ts 负责把具体存储注入应用层。XML 库与 fs 仅由基础设施层引用；未出现跨层逆向依赖或 CLI 直接修改领域数据。
+
+最终核对结果及人工抽样依据见 [FINAL_AUDIT.md](FINAL_AUDIT.md)。复现命令为 `npm run check:architecture`；检查器覆盖静态依赖边界，CLI 只读行为另由代码抽查与功能测试确认。
 
 ## 质量保证手段
 
@@ -331,3 +349,13 @@ npm run cli
 - V8 生产代码覆盖率：行 96.83%、分支 94.43%、函数 99.30%；统计对象为编译后的 `dist/src/**`；
 - 完整会话逐行比对、640 条固定种子混合输入及 1038 次全量撤销/重做状态检查均通过；
 - 详细结果及实际限制见[测试报告](TEST_REPORT.md)。
+
+### 阶段 8 最终验证记录
+
+验证日期：2026-10-30。
+
+- `npm.cmd run test:coverage`：构建成功，109 项测试全部通过；覆盖率仍为行 96.83%、分支 94.43%、函数 99.30%；
+- `npm.cmd run check:architecture`：51 个生产源文件、49 个类、179 条静态 import 通过检查，类/文件命名和文档本地链接有效；
+- 主文档内嵌的 PlantUML 与独立源文件一致，SVG 静态图已通过浏览器渲染目视检查；
+- 交付文件不包含依赖目录、构建产物或临时预览；Git 历史保留逐阶段提交；
+- 最终提交和 `final` 附注标签只在本地建立，本阶段不执行上传。后续操作见[最终审计](FINAL_AUDIT.md)。

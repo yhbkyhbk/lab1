@@ -1,0 +1,26 @@
+@startuml
+skinparam componentStyle rectangle
+
+component "CLI\nREPL / Parser / Formatter" as CLI
+package "Application" {
+  component "SvgEditor\nCommands / History" as APP
+  interface "SvgStorage" as PORT
+}
+component "Domain\nDocument / Shape / Group" as DOMAIN
+component "Infrastructure\nSVG Reader / Writer / Files" as INFRA
+component "Composition Root\nmain.ts" as MAIN
+
+CLI --> APP : 编辑用例
+CLI ..> DOMAIN : 只读访问器与 Visitor
+APP --> DOMAIN : 领域行为
+APP --> PORT : 同步读写
+INFRA ..|> PORT : 实现端口
+INFRA --> DOMAIN : 构造与序列化
+MAIN --> CLI : 创建
+MAIN --> APP : 组装
+MAIN --> INFRA : 组装
+
+note bottom of DOMAIN
+  不依赖外层、文件系统或 XML 库
+end note
+@enduml

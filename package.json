@@ -9,6 +9,7 @@
     "test": "npm run build --silent && node --test dist/test/TestSuite.js",
     "test:acceptance": "npm run build --silent && node --test dist/test/AcceptanceSuite.js",
     "test:coverage": "npm run build --silent && node --test --experimental-test-coverage --test-coverage-include=dist/src/** dist/test/TestSuite.js",
+    "check:architecture": "node scripts/ArchitectureAudit.mjs",
     "cli": "npm run build --silent && node dist/src/main.js"
   },
   "engines": {
