@@ -1,6 +1,6 @@
 # SVG 编辑器（CLI）
 
-本文档随实现逐阶段更新。当前已完成阶段 6：本阶段要求的编辑命令、Command/undo/redo、交互式 REPL、显示和 SVG 文件读写均已实现。`npm run cli` 可以逐行输入命令或接收 stdin 脚本；最终完整验收与一致性审计仍将在阶段 7/8 继续完成。
+本文档随实现逐阶段更新。当前已完成阶段 7：要求中的 CLI、编辑、历史与 SVG 文件读写已通过完整会话和边界验收。累计 109 项测试通过，详细证据见[测试报告](TEST_REPORT.md)；最终文档一致性审计和发布标签仍留待阶段 8。
 
 启动与快速体验：
 
@@ -123,7 +123,7 @@ XML 适配器使用 [xmldom 的 DOMParser/XMLSerializer](https://github.com/xmld
 | `domain` | 无其他业务模块 | 保持领域规则独立且可测试 |
 | `application` | `domain` | 应用层只负责编排领域对象 |
 | `infrastructure` | `domain`、`application/ports` | 将 SVG 转换为领域对象并实现应用端口 |
-| `cli` | `application`；`domain` 的只读访问器、Visitor 协议和错误类型 | 编辑必须调用应用层；显示通过只读 Visitor 读取图形，格式保留在 CLI |
+| `cli` | `application`；`domain` 的只读访问器、Visitor 协议、数值解析与错误类型 | 编辑必须调用应用层；显示通过只读 Visitor 读取图形，格式保留在 CLI |
 | `main.ts` | 所有模块 | 组合入口实例化具体实现，但不承载业务逻辑 |
 | `test` | 被测模块 | 测试可以直接验证各层公开行为 |
 
@@ -219,6 +219,15 @@ XML 适配器使用 [xmldom 的 DOMParser/XMLSerializer](https://github.com/xmld
 - 增加 root viewBox 与被动展示属性的领域值对象，保留外部文件的坐标系、字体和继承样式；不声称支持任意 SVG，对不支持的变换和结构明确拒绝。
 - 完整回放要求第 6 节的 save/read 流程，并用真实 Node 子进程生成、读回两节点流程图；另在 Edge 无头浏览器打开生成文件，检查矩形、连线和中文文字均正常。
 
+### 阶段 7：完整验收与边界测试
+
+- 新增独立验收入口 `npm run test:acceptance` 和内置 V8 覆盖率入口 `npm run test:coverage`。
+- 把作业第 6 节完整会话拆成命令与预期输出 fixture，使用真实进程在临时目录执行，逐行比较反馈、错误、warning 和树，并检查生成的 SVG 内容。
+- 回归测试确认两项缺陷：`set` 接受十六进制导致数值规则不一致；`show` 没有显示已导入的被动展示属性。分别通过共享 `FiniteNumber` 和补齐格式化器修复，未扩大 set 白名单。
+- 增加所有图形的几何/公共属性白名单矩阵、溢出原子性、大小写敏感、特殊文本和 EOF 边界。
+- 4 个固定种子生成 640 条混合输入，519 次成功编辑均逐条撤销/重做，121 次拒绝输入均验证树与历史不变；同时检查全局 id、对象身份、父指针和序列化回环。
+- 使用 `npm ci` 从锁文件重装依赖，再次执行完整覆盖率测试，确认可复现；实际结果和未覆盖范围如实记录在 `doc/TEST_REPORT.md`。
+
 ## 一致性自查
 
 ### 模块划分
@@ -239,6 +248,8 @@ XML 适配器使用 [xmldom 的 DOMParser/XMLSerializer](https://github.com/xmld
 4. SVG round-trip 测试验证嵌套层级、顺序、文字转义、浮点数和自动 id；
 5. CLI 集成测试回放要求中的完整 transcript，并比较稳定输出；
 6. 手动用浏览器打开保存的 SVG，确认文件可以真实渲染。
+
+阶段 7 的完整[验收报告](TEST_REPORT.md)列出了需求矩阵、复现命令、已发现问题及修复、固定种子测试和实际覆盖率；不要只根据“测试通过”判断功能完整性。
 
 阶段 1 的质量门槛为：
 
@@ -309,3 +320,14 @@ npm run cli
 - 真实子进程完成两节点流程图的 save→init→read，生成并重新读回 8 个元素；完整作业 transcript 的 save/read 部分也已自动验证。
 - Edge 无头浏览器实际打开 `fixtures/flowchart.svg`，已目视检查 PNG，矩形、连线和中文文字正常，预览截图保存于 `doc/assets/flowchart-preview.png`。
 - npm 安装审计 6 个包，报告 0 个已知漏洞。
+
+### 阶段 7 验证记录
+
+验证日期：2026-10-30。
+
+- `npm.cmd run test:acceptance`：18 项验收测试通过；
+- `npm.cmd ci`：依赖重装成功，审计 6 个包，0 个已知漏洞；
+- 重装后 `npm.cmd run test:coverage`：严格模式构建通过，109 项完整测试通过、0 项失败或跳过；
+- V8 生产代码覆盖率：行 96.83%、分支 94.43%、函数 99.30%；统计对象为编译后的 `dist/src/**`；
+- 完整会话逐行比对、640 条固定种子混合输入及 1038 次全量撤销/重做状态检查均通过；
+- 详细结果及实际限制见[测试报告](TEST_REPORT.md)。

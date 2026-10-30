@@ -1,4 +1,5 @@
 import { DomainError } from "../domain/errors/DomainError.js";
+import { FiniteNumber } from "../domain/FiniteNumber.js";
 
 export class CommandArguments {
   private readonly values: readonly string[];
@@ -24,13 +25,7 @@ export class CommandArguments {
   }
 
   public number(index: number): number {
-    const value = this.text(index);
-    if (!/^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/.test(value)) {
-      throw new DomainError(`invalid number: ${value}`);
-    }
-    const number = Number(value);
-    if (!Number.isFinite(number)) throw new DomainError(`invalid number: ${value}`);
-    return number;
+    return FiniteNumber.parse(this.text(index));
   }
 
   public tail(start: number, end = this.length): readonly string[] {

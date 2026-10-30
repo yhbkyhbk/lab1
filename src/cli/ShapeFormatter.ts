@@ -17,6 +17,9 @@ export class ShapeFormatter extends ShapeVisitor<string> {
     if (shape.fill !== undefined) styles.push(`fill=${shape.fill}`);
     if (shape.stroke !== undefined) styles.push(`stroke=${shape.stroke}`);
     if (shape.strokeWidth !== undefined) styles.push(`stroke-width=${shape.strokeWidth}`);
+    for (const [name, value] of shape.extraSvgAttributes) {
+      styles.push(`${name}=${/\s/.test(value) ? JSON.stringify(value) : value}`);
+    }
     return styles.join(" ");
   }
 

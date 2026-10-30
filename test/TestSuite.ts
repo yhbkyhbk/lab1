@@ -10,4 +10,7 @@ import "./CliCommands.test.js";
 import "./CliSession.test.js";
 import "./SvgCodec.test.js";
 import "./SvgStorage.test.js";
+import "./BoundaryAcceptance.test.js";
+import "./SessionAcceptance.test.js";
+import "./HistoryStress.test.js";
 

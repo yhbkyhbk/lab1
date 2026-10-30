@@ -4,6 +4,7 @@ import type { SvgDocument } from "../SvgDocument.js";
 import type { Group } from "./Group.js";
 import type { ShapeVisitor } from "./ShapeVisitor.js";
 import { SvgAttributes } from "../SvgAttributes.js";
+import { FiniteNumber } from "../FiniteNumber.js";
 
 export abstract class Shape {
   private readonly shapeId: string;
@@ -198,12 +199,7 @@ export abstract class Shape {
   ): string | undefined;
 
   protected parseFiniteNumber(value: string, attribute: string): number {
-    if (value.trim().length === 0) {
-      throw new DomainError(`invalid number for ${attribute}: ${value}`);
-    }
-    const parsed = Number(value);
-    this.assertFinite(parsed, attribute);
-    return parsed;
+    return FiniteNumber.parse(value, attribute);
   }
 
   protected assertFinite(value: number, attribute: string): void {

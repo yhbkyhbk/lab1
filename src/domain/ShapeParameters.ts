@@ -1,4 +1,5 @@
 import { DomainError } from "./errors/DomainError.js";
+import { FiniteNumber } from "./FiniteNumber.js";
 
 export class ShapeParameters {
   private readonly values: readonly string[];
@@ -24,12 +25,6 @@ export class ShapeParameters {
   }
 
   public number(index: number): number {
-    const value = this.text(index);
-    if (!/^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/.test(value)) {
-      throw new DomainError(`invalid number: ${value}`);
-    }
-    const result = Number(value);
-    if (!Number.isFinite(result)) throw new DomainError(`invalid number: ${value}`);
-    return result;
+    return FiniteNumber.parse(this.text(index));
   }
 }
