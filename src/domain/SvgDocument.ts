@@ -4,18 +4,33 @@ import { StateMemento } from "./memento/StateMemento.js";
 import { Group } from "./shapes/Group.js";
 import { Shape } from "./shapes/Shape.js";
 import { ShapePlacement } from "./tree/ShapePlacement.js";
+import { ViewBox } from "./ViewBox.js";
+import { SvgAttributes } from "./SvgAttributes.js";
 
 export class SvgDocument {
   private canvasWidth: number;
   private canvasHeight: number;
   private readonly rootShapes: Shape[] = [];
   private readonly shapesById = new Map<string, Shape>();
+  private coordinateBox: ViewBox;
+  private readonly preservedAttributes = new SvgAttributes(true);
 
-  public constructor(width = 800, height = 600) {
+  public constructor(width = 800, height = 600, viewBox?: ViewBox) {
     this.validateCanvasDimension(width, "width");
     this.validateCanvasDimension(height, "height");
     this.canvasWidth = width;
     this.canvasHeight = height;
+    this.coordinateBox = viewBox ?? new ViewBox(0, 0, width, height);
+  }
+
+  public get viewBox(): ViewBox { return this.coordinateBox; }
+
+  public preserveSvgAttribute(name: string, value: string): void {
+    this.preservedAttributes.set(name, value);
+  }
+
+  public get extraSvgAttributes(): readonly (readonly [string, string])[] {
+    return this.preservedAttributes.entries();
   }
 
   public get width(): number {
@@ -80,6 +95,7 @@ export class SvgDocument {
     this.validateCanvasDimension(height, "height");
     this.canvasWidth = width;
     this.canvasHeight = height;
+    this.coordinateBox = new ViewBox(0, 0, width, height);
   }
 
   public addShape(shape: Shape, parentId?: string): void {

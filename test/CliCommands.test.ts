@@ -148,11 +148,11 @@ test("display commands do not block history; canvas modification does", () => {
   assert.equal(cli.execute("undo"), "rect#r moved back to (0,0)");
 });
 
-test("unimplemented read/save are explicit and do not alter history", () => {
+test("an editor without a storage adapter fails IO without altering history", () => {
   const cli = new CommandDispatcher();
   cli.execute("init");
   cli.execute("create g g");
-  assert.equal(cli.execute("save demo.svg"), "error: save is not implemented yet (SVG IO: stage 6)");
-  assert.equal(cli.execute("read demo.svg"), "error: read is not implemented yet (SVG IO: stage 6)");
+  assert.equal(cli.execute("save demo.svg"), "error: SVG storage is not configured");
+  assert.equal(cli.execute("read demo.svg"), "error: SVG storage is not configured");
   assert.equal(cli.execute("undo"), "g#g creation undone");
 });

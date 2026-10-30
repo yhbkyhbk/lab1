@@ -3,6 +3,7 @@ import { StateMemento } from "../memento/StateMemento.js";
 import type { SvgDocument } from "../SvgDocument.js";
 import type { Group } from "./Group.js";
 import type { ShapeVisitor } from "./ShapeVisitor.js";
+import { SvgAttributes } from "../SvgAttributes.js";
 
 export abstract class Shape {
   private readonly shapeId: string;
@@ -11,6 +12,15 @@ export abstract class Shape {
   private fillValue: string | undefined;
   private strokeValue: string | undefined;
   private strokeWidthValue: number | undefined;
+  private readonly preservedAttributes = new SvgAttributes();
+
+  public preserveSvgAttribute(name: string, value: string): void {
+    this.preservedAttributes.set(name, value);
+  }
+
+  public get extraSvgAttributes(): readonly (readonly [string, string])[] {
+    return this.preservedAttributes.entries();
+  }
 
   protected constructor(id: string) {
     if (id.length === 0) {

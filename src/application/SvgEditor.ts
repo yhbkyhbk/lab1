@@ -4,11 +4,42 @@ import { ShapeFactory } from "../domain/ShapeFactory.js";
 import { CreateCommand } from "./commands/CreateCommand.js";
 import type { Command } from "./commands/Command.js";
 import { CommandHistory } from "./history/CommandHistory.js";
+import type { SvgStorage } from "./ports/SvgStorage.js";
+import type { SvgReadResult } from "./ports/SvgReadResult.js";
 
 export class SvgEditor {
   private currentDocument: SvgDocument | null = null;
   private readonly history = new CommandHistory();
   private readonly shapeFactory = new ShapeFactory();
+  private readonly storage: SvgStorage | undefined;
+  private currentPath: string | undefined;
+
+  public constructor(storage?: SvgStorage) {
+    this.storage = storage;
+  }
+
+  public get filePath(): string | undefined { return this.currentPath; }
+
+  public read(path: string): SvgReadResult {
+    if (this.storage === undefined) throw new DomainError("SVG storage is not configured");
+    const result = this.storage.read(path);
+    this.replaceDocument(result.document);
+    this.currentPath = path;
+    return result;
+  }
+
+  public save(path?: string): string {
+    const document = this.document;
+    const target = path ?? this.currentPath;
+    if (target === undefined || target.length === 0) {
+      throw new DomainError("no file path. use 'save <file.svg>' first");
+    }
+    if (this.storage === undefined) throw new DomainError("SVG storage is not configured");
+    this.storage.write(target, document);
+    this.currentPath = target;
+    this.history.markIoBoundary();
+    return target;
+  }
 
   public createShape(type: string, id: string, parameters: readonly string[], parentId?: string): CreateCommand {
     const document = this.document;
@@ -42,6 +73,7 @@ export class SvgEditor {
   /** Called only after a complete, successful SVG read. */
   public replaceDocument(document: SvgDocument): void {
     this.currentDocument = document;
+    this.currentPath = undefined;
     this.history.markIoBoundary();
   }
 

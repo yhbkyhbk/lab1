@@ -223,13 +223,15 @@ export class CommandDispatcher {
 
   private read(args: CommandArguments): string {
     args.expect(1, 1, "read <file.svg>");
-    throw new DomainError("read is not implemented yet (SVG IO: stage 6)");
+    const path = args.text(0);
+    const result = this.editor.read(path);
+    return [...result.warnings, `read ${path} (${result.document.elementCount} elements)`].join("\n");
   }
 
   private save(args: CommandArguments): string {
     args.expect(0, 1, "save [file.svg]");
-    void this.editor.document;
-    throw new DomainError("save is not implemented yet (SVG IO: stage 6)");
+    const path = this.editor.save(args.length === 0 ? undefined : args.text(0));
+    return `saved to ${path} (${this.editor.document.elementCount} elements)`;
   }
 
   private edit(command: Command, applied: () => string, reverted: () => string): string {

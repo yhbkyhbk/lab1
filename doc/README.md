@@ -1,6 +1,6 @@
 # SVG 编辑器（CLI）
 
-本文档随实现逐阶段更新。当前已完成阶段 5：图形模型、树结构编辑、Command/undo/redo、命令行解析、交互式 REPL 以及 `tree/show/help` 已经建立。`npm run cli` 可以逐行输入命令或接收 stdin 脚本；`read/save` 的 SVG 文件读写将在阶段 6 实现，当前调用会明确报错，且不会改变文档或历史。
+本文档随实现逐阶段更新。当前已完成阶段 6：本阶段要求的编辑命令、Command/undo/redo、交互式 REPL、显示和 SVG 文件读写均已实现。`npm run cli` 可以逐行输入命令或接收 stdin 脚本；最终完整验收与一致性审计仍将在阶段 7/8 继续完成。
 
 启动与快速体验：
 
@@ -20,6 +20,8 @@ tree
 move node 0 100
 undo
 show label
+save demo.svg
+read demo.svg
 help
 ```
 
@@ -30,6 +32,10 @@ Get-Content -Encoding UTF8 fixtures/flowchart.commands.txt | node dist/src/main.
 ```
 
 回放前先执行 `npm.cmd run build`。Windows PowerShell 5 的管道编码可能不是 UTF-8，若中文乱码，可先设置当前会话 `$OutputEncoding = [System.Text.UTF8Encoding]::new()`；自动化回放测试直接以 UTF-8 输入 Node 进程，不受该管道设置影响。
+
+生成结果示例：[flowchart.svg](../fixtures/flowchart.svg)。它由示例命令实际保存，包含 8 个图形元素，可直接用 Edge/Chrome/Firefox 打开。下面是本次 Edge 无头浏览器渲染的截图：
+
+![Edge 渲染的流程图](assets/flowchart-preview.png)
 
 ## 架构方案
 
@@ -96,6 +102,20 @@ end note
 
 图形工厂和命令分发器中的按名称分派均属于已识别的待重构项。本阶段不会实现后续插件化阶段的 `box` 类型。
 
+阶段 6 的 IO 适配结构：
+
+| 类或模块 | 职责 |
+|---|---|
+| `application/ports/SvgStorage` | 定义读写端口，应用层不依赖文件系统或 XML 库 |
+| `SvgReadResult` | 返回已完成校验的文档和缓冲的补 id 警告 |
+| `infrastructure/svg/SvgReader` | 使用 DOM 解析 SVG，完整校验、保留层级并自动补 id |
+| `SvgWriter/SvgShapeWriter` | 使用 Visitor 构造 XML DOM，处理六种图形和文字/属性转义 |
+| `SvgFileStorage` | 实现 UTF-8 文件读取与同目录临时文件替换式保存 |
+| `domain/ShapeDefinition` | 在唯一的图形工厂内共享 CLI 和 SVG 的类型定义及几何 schema |
+| `ViewBox/SvgAttributes` | 封装坐标系和可保留的展示属性，保持 XML 库细节在基础设施层 |
+
+XML 适配器使用 [xmldom 的 DOMParser/XMLSerializer](https://github.com/xmldom/xmldom)，版本固定为 `@xmldom/xmldom@0.9.12`，并提交 npm 锁文件。文件接口采用同步操作以匹配逐行 CLI；后续如需远程存储，可修改端口和入口为异步，领域模型无需依赖该变化。
+
 ### 依赖方向规则
 
 | 调用方 | 允许依赖 | 理由 |
@@ -123,12 +143,14 @@ end note
 
 ### 规格补充决策
 
-下列边界在原要求中没有完全规定，将在对应功能实现前确定并用测试固定：
+下列原要求未完全规定的边界已在实现中确定并用测试固定：
 
-- 导入文件含重复 id 时的错误文案；
-- `init` 后执行无路径 `save` 的行为；
-- 非法数字和负尺寸的其他错误文案；
-- 外部 SVG 含未知元素或不支持属性时的处理。
+- 外部文件含重复 id 时，整个 read 失败，报 `id already exists: <id>`；先预留全部显式 id，再补缺失 id，避免与后出现的元素冲突。
+- 无参数 save 使用最近一次成功 read/save 的路径；init 清除记忆路径；无路径时提示 `no file path. use 'save <file.svg>' first`。失败操作不更新路径。
+- 数值接受有限十进制、浮点和科学计数法；SVG 数值可带 px 后缀；宽高/半径非负、画布和 viewBox 尺寸为正。
+- 导入保留宽高、viewBox、全局和元素级样式及字体/文本对齐等被动展示属性；后者不扩大 `set` 命令白名单。canvas 修改尺寸后，viewBox 重置为 `0 0 w h`。
+- 外部 SVG 限于六种图形和已支持的展示属性；未知元素、未知属性、transform、内嵌 tspan、CSS style/class、百分比/非 px 单位会明确报错，避免静默丢弃或错误变换。后续若扩展支持，应先定义编辑语义再增加测试。
+- 输入文件使用 UTF-8；无效字节直接读入失败。支持 XML 声明、命名空间前缀、注释、CDATA 和字符实体；不支持 DOCTYPE 与其他处理指令。注释不参与可编辑文档，保存时不保留注释。
 
 已经明确：`canvas` 无参数查询不会阻断 undo；任何失败操作必须保持文档、id 索引和历史栈不变；不支持的输入不会被静默丢弃。空的 `g` 图形合法，但 `group <newGid>` 必须至少指定一个现有图形。跨父容器分组按操作前的深度优先文档顺序排列目标，新 Group 放在最早目标的原父容器和原索引；若同时选择祖先和后代则整体拒绝。`front` 移到同级数组末尾，`back` 移到开头，以符合 SVG 后绘制元素显示在前面的规则。
 
@@ -186,15 +208,26 @@ end note
 - `Repl.run()` 使用 readline 逐行处理输入，错误后继续接收命令，支持 CRLF、stdin 脚本和 EOF 退出；保留 `start()` 的启动显示接口。
 - 新增 `fixtures/flowchart.commands.txt`，使用真实子进程回放要求第 6.1 节的手工组合流程图。暂不加入 save；文件 IO 的成功/失败和持久化留到阶段 6 验证。
 
+### 阶段 6：SVG 文件读写
+
+- 将文件接口定义在 application/ports，并在 main.ts 显式注入 `SvgFileStorage`；CLI 和应用层都没有导入文件系统或 XML 库。
+- 读取先严格解析 XML、检查全局重复 id、分配缺失 id、构建完整新文档，全部成功后才替换旧文档、更新路径并清空历史；失败不会输出预先缓冲的 warning。
+- 保存先完成 XML DOM 序列化，再创建同目录随机临时文件。文件描述符在 finally 中关闭，成功后 rename 到目标；错误时删除本次临时文件，原目标和编辑历史保持不变。
+- SVG 序列化复用 Visitor，类型创建复用唯一的 ShapeFactory；为共享 SVG 几何 schema 引入 `ShapeDefinition`，没有新增第三处按图形名分派。
+- 编解码测试发现 XML 库把声明 `<?xml ...?>` 表示为处理指令，直接对整份 DOM 进行严格重新序列化会误拒绝合法 XML 声明。调整为先检查顶层节点，再严格校验实际根子树；用作业原始样例和保存读回用例确认修正。
+- 显式处理文字中的 CR 和属性中的空白实体，避免 XML 规范化导致读回内容变化；省略的 fill/stroke 仍保持未设置。
+- 增加 root viewBox 与被动展示属性的领域值对象，保留外部文件的坐标系、字体和继承样式；不声称支持任意 SVG，对不支持的变换和结构明确拒绝。
+- 完整回放要求第 6 节的 save/read 流程，并用真实 Node 子进程生成、读回两节点流程图；另在 Edge 无头浏览器打开生成文件，检查矩形、连线和中文文字均正常。
+
 ## 一致性自查
 
 ### 模块划分
 
-阶段 1 建立了骨架；阶段 2/3 加入图形类层次与树结构；阶段 4 加入应用层和 Memento；阶段 5 加入完整 CLI、领域工厂、Visitor 协议和 fixtures。所有类各自独立成文件，文件名与类名一致；`infrastructure` 和文件访问端口仍待 IO 阶段建立。
+阶段 1 建立骨架；阶段 2/3 加入领域模型与树结构；阶段 4 加入应用层和 Memento；阶段 5 加入 CLI、工厂、Visitor 与 fixtures；阶段 6 加入计划中的 `infrastructure/svg/` 和 `application/ports/`。`ViewBox/SvgAttributes/ShapeDefinition` 是 IO 阶段的已记录细化。所有类独立成文件，文件名与类名一致。
 
 ### 依赖方向
 
-领域层只依赖自身类型；应用层只依赖领域层和应用层自身；CLI 负责 readline、命令语法和输出，编辑调用应用层，显示通过只读 Visitor 访问领域。快照重建所需内部树令牌仍仅在领域层使用。按阶段 5 修订后的规则，未发现跨层逆向依赖或 CLI 直接修改领域数据。
+领域层只依赖自身类型；应用层只依赖领域对象和自身端口；基础设施层实现应用端口并构造/读取领域对象；CLI 负责 readline、命令语法和输出。main.ts 负责把具体存储注入应用层。XML 库与 fs 仅由基础设施层引用；未出现跨层逆向依赖或 CLI 直接修改领域数据。
 
 ## 质量保证手段
 
@@ -265,3 +298,14 @@ npm run cli
 - 真实 Node 子进程读取流程图脚本并退出，stdout 包含预期层级、中文和 undo 摘要，stderr 为空，退出码为 0；
 - 流式 REPL 测试覆盖 CRLF、注释和错误后继续执行；
 - `read/save` 当前明确返回“阶段 6 实现”，失败不阻断已有 undo/redo，测试中单独验证此阶段边界。
+
+### 阶段 6 验证记录
+
+验证日期：2026-10-30。
+
+- `npm.cmd test`：通过，91 项测试全部成功，0 项失败，包含严格模式构建；新增 21 项 SVG 编解码与真实文件测试。
+- round-trip 覆盖六种图形、嵌套顺序、id、浮点、viewBox、展示属性、中文/emoji、实体、CDATA、空内容、CR/换行及省略样式。
+- 文件测试覆盖中文与空格路径、无参数 save、init 重置路径、补 id 警告、重复 id、损坏 XML、无效 UTF-8、缺失文件、不可写目标、序列化失败和临时文件清理；均检查失败后文档/路径/历史保持。
+- 真实子进程完成两节点流程图的 save→init→read，生成并重新读回 8 个元素；完整作业 transcript 的 save/read 部分也已自动验证。
+- Edge 无头浏览器实际打开 `fixtures/flowchart.svg`，已目视检查 PNG，矩形、连线和中文文字正常，预览截图保存于 `doc/assets/flowchart-preview.png`。
+- npm 安装审计 6 个包，报告 0 个已知漏洞。

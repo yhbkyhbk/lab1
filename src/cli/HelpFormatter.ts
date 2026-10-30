@@ -3,8 +3,8 @@ export class HelpFormatter {
     return [
       "Document:",
       "  init [w] [h]                         (defaults: 800x600)",
-      "  read <file.svg>                       (SVG IO: stage 6)",
-      "  save [file.svg]                       (SVG IO: stage 6)",
+      "  read <file.svg>",
+      "  save [file.svg]                       (last read/saved path if omitted)",
       "  canvas [w] [h]",
       "Edit:",
       "  create <type> <id> [params...] [in <containerId>]",
