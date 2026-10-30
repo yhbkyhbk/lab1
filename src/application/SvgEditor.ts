@@ -1,11 +1,22 @@
 import { DomainError } from "../domain/errors/DomainError.js";
 import { SvgDocument } from "../domain/SvgDocument.js";
+import { ShapeFactory } from "../domain/ShapeFactory.js";
+import { CreateCommand } from "./commands/CreateCommand.js";
 import type { Command } from "./commands/Command.js";
 import { CommandHistory } from "./history/CommandHistory.js";
 
 export class SvgEditor {
   private currentDocument: SvgDocument | null = null;
   private readonly history = new CommandHistory();
+  private readonly shapeFactory = new ShapeFactory();
+
+  public createShape(type: string, id: string, parameters: readonly string[], parentId?: string): CreateCommand {
+    const document = this.document;
+    const shape = this.shapeFactory.create(type, id, parameters);
+    const command = new CreateCommand(document, shape, parentId);
+    this.execute(command);
+    return command;
+  }
 
   public get document(): SvgDocument {
     if (this.currentDocument === null) {

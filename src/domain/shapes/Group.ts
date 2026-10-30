@@ -4,8 +4,13 @@ import {
   type TreeMutationToken,
 } from "../internal/TreeMutationToken.js";
 import { Shape } from "./Shape.js";
+import type { ShapeVisitor } from "./ShapeVisitor.js";
 
 export class Group extends Shape {
+  public override accept<Result>(visitor: ShapeVisitor<Result>): Result {
+    return visitor.visitGroup(this);
+  }
+
   private readonly childShapes: Shape[] = [];
 
   public constructor(id: string, children: readonly Shape[] = []) {
@@ -21,7 +26,7 @@ export class Group extends Shape {
     return "g";
   }
 
-  public get children(): readonly Shape[] {
+  public override get children(): readonly Shape[] {
     return [...this.childShapes];
   }
 

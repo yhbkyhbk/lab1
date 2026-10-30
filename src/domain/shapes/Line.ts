@@ -1,6 +1,11 @@
 import { Shape } from "./Shape.js";
+import type { ShapeVisitor } from "./ShapeVisitor.js";
 
 export class Line extends Shape {
+  public override accept<Result>(visitor: ShapeVisitor<Result>): Result {
+    return visitor.visitLine(this);
+  }
+
   private x1Value: number;
   private y1Value: number;
   private x2Value: number;

@@ -1,6 +1,35 @@
 # SVG 编辑器（CLI）
 
-本文档随实现逐阶段更新。当前已完成阶段 4：图形领域模型、全部树结构编辑、Command/undo/redo 和 IO 历史屏障已经建立；命令行解析、完整 REPL 与 SVG 文件读写将在后续阶段实现。目前 `npm run cli` 仍只启动提示骨架，编辑功能通过应用层 API 和自动化测试验证。
+本文档随实现逐阶段更新。当前已完成阶段 5：图形模型、树结构编辑、Command/undo/redo、命令行解析、交互式 REPL 以及 `tree/show/help` 已经建立。`npm run cli` 可以逐行输入命令或接收 stdin 脚本；`read/save` 的 SVG 文件读写将在阶段 6 实现，当前调用会明确报错，且不会改变文档或历史。
+
+启动与快速体验：
+
+```bash
+npm ci
+npm run cli
+```
+
+进入提示符后输入：
+
+```text
+init 800 600
+create g node
+create rect body 10 20 160 60 #4a90d9 in node
+create text label 30 55 "开始" in node
+tree
+move node 0 100
+undo
+show label
+help
+```
+
+PowerShell 可使用 `npm.cmd run cli`；Windows 在新的一行按 Ctrl+Z 再回车退出，Unix 使用 Ctrl+D。回放示例脚本可在项目目录执行：
+
+```powershell
+Get-Content -Encoding UTF8 fixtures/flowchart.commands.txt | node dist/src/main.js
+```
+
+回放前先执行 `npm.cmd run build`。Windows PowerShell 5 的管道编码可能不是 UTF-8，若中文乱码，可先设置当前会话 `$OutputEncoding = [System.Text.UTF8Encoding]::new()`；自动化回放测试直接以 UTF-8 输入 Node 进程，不受该管道设置影响。
 
 ## 架构方案
 
@@ -28,6 +57,7 @@ component "Infrastructure\nSVG Reader / Writer" as INFRA
 component "Composition Root\nmain.ts" as MAIN
 
 CLI --> APP : 调用编辑用例
+CLI ..> DOMAIN : 只读访问器与 Visitor
 APP --> DOMAIN : 操作领域对象
 INFRA --> DOMAIN : 构造/序列化领域对象
 INFRA ..|> APP : 实现文件访问端口
@@ -49,6 +79,7 @@ end note
 4. **Command Registry**：命令分发器根据命令名选择处理器。这是另一处允许的按名称分派，未来可改为插件式注册。
 5. **Ports and Adapters**：应用层声明 SVG 文件访问端口，基础设施层实现它，使核心逻辑不依赖具体 XML 库和文件系统细节。
 6. **Memento**：阶段 4 使用不透明的 `StateMemento` 保存可恢复状态，具体字段由领域对象自己捕获。几何操作直接还原原值，避免浮点逆运算误差；结构操作捕获父子关系和对象引用，恢复时统一重建索引。命令和历史管理器都不读取图形私有字段。
+7. **Visitor**：阶段 5 中，六种图形通过 `accept(ShapeVisitor)` 选择 `ShapeFormatter/PositionFormatter` 的具体格式化行为。领域层只定义访问协议，CLI 层实现输出格式，不增加按类型名的条件分派。
 
 阶段 4 的实际落地类如下：
 
@@ -72,11 +103,11 @@ end note
 | `domain` | 无其他业务模块 | 保持领域规则独立且可测试 |
 | `application` | `domain` | 应用层只负责编排领域对象 |
 | `infrastructure` | `domain`、`application/ports` | 将 SVG 转换为领域对象并实现应用端口 |
-| `cli` | `application` | CLI 是输入输出适配器，只调用用例 |
+| `cli` | `application`；`domain` 的只读访问器、Visitor 协议和错误类型 | 编辑必须调用应用层；显示通过只读 Visitor 读取图形，格式保留在 CLI |
 | `main.ts` | 所有模块 | 组合入口实例化具体实现，但不承载业务逻辑 |
 | `test` | 被测模块 | 测试可以直接验证各层公开行为 |
 
-禁止领域层引用 Node 文件系统、XML 解析器、REPL 或输出格式；禁止应用层直接打印终端文本；禁止 CLI 直接修改图形内部字段。若后续实现违反规则，应在进入下一阶段前处理，或在修订记录中说明。
+禁止领域层引用 Node 文件系统、XML 解析器、REPL 或输出格式；禁止应用层直接打印终端文本；禁止 CLI 调用领域变更方法、导入内部树令牌或直接修改图形字段。CLI 对领域的只读依赖是在阶段 5 明确修订的规则，使显示逻辑无需放入应用层。若后续实现违反规则，应在进入下一阶段前处理，或在修订记录中说明。
 
 ### 变化点假设
 
@@ -144,15 +175,26 @@ end note
 - 一条包含 15 次混合编辑的用例逐步撤销到空文档、再逐步重做，每一步都检查结构、属性、父指针、索引和计数。
 - 从阶段 3 起，项目所有者授权 AI 完成经过验证的阶段提交和远程推送，提交说明使用中文；每阶段结束仍停下来确认下一阶段。
 
+### 阶段 5：CLI、显示与会话回放
+
+- `Tokenizer` 逐字符解析双引号、转义引号和反斜杠，保留空文本和中文；只有整行第一个非空白字符为 `#` 时才忽略该行，不会截断 `#ffffff` 颜色。
+- `CommandDispatcher` 将命令名映射到处理方法，所有编辑通过应用层 Command 执行。`ShapeFactory` 是唯一的图形类型名映射，集中创建六种图形，拒绝 `box`；两处名称分派继续列为待重构边界。
+- 创建命令在尾部解析 `in <containerId>`，包括 `create g ... in ...`；文字中的 `in` 保持文本内容。参数数量和数值先验证，错误统一转为一行 `error:` 输出。
+- 为图形增加只读 Visitor 协议和统一的 `children` 访问器；CLI 格式化器通过多态读取几何数据，生成树枝、内联属性、样式和父容器信息。
+- 初始依赖规则只允许 CLI 引用 application。实现显示时，为避免把终端格式写进应用层，明确修订为“CLI 可读取领域公开访问器/Visitor，编辑仍只能调用应用层”，并同步修改组件图和依赖表。
+- `CommandFeedback` 将编辑与历史反馈保留在 CLI，并使用 WeakMap 关联 Command；undo/redo 重新读取恢复后的图形状态，不污染领域或历史管理器。
+- `Repl.run()` 使用 readline 逐行处理输入，错误后继续接收命令，支持 CRLF、stdin 脚本和 EOF 退出；保留 `start()` 的启动显示接口。
+- 新增 `fixtures/flowchart.commands.txt`，使用真实子进程回放要求第 6.1 节的手工组合流程图。暂不加入 save；文件 IO 的成功/失败和持久化留到阶段 6 验证。
+
 ## 一致性自查
 
 ### 模块划分
 
-阶段 1 建立了 `src/cli/`、入口、测试和文档；阶段 2 加入图形类层次和 `SvgDocument`；阶段 3 加入树结构操作；阶段 4 按方案加入 `src/application/commands/`、`history/`、`SvgEditor`，以及领域内的 `memento/`。新增 Memento 属于阶段 4 的已记录方案细化；`infrastructure` 和文件访问端口仍待 IO 阶段建立。
+阶段 1 建立了骨架；阶段 2/3 加入图形类层次与树结构；阶段 4 加入应用层和 Memento；阶段 5 加入完整 CLI、领域工厂、Visitor 协议和 fixtures。所有类各自独立成文件，文件名与类名一致；`infrastructure` 和文件访问端口仍待 IO 阶段建立。
 
 ### 依赖方向
 
-领域层只依赖自身类型；应用层只依赖领域层和应用层自身，没有引用 CLI、文件系统或 XML 库；CLI 仍为阶段 1 骨架。快照重建所需内部树令牌仅在领域层使用，命令不导入内部变更原语。未发现违反上述规则的跨层依赖。
+领域层只依赖自身类型；应用层只依赖领域层和应用层自身；CLI 负责 readline、命令语法和输出，编辑调用应用层，显示通过只读 Visitor 访问领域。快照重建所需内部树令牌仍仅在领域层使用。按阶段 5 修订后的规则，未发现跨层逆向依赖或 CLI 直接修改领域数据。
 
 ## 质量保证手段
 
@@ -213,3 +255,13 @@ npm run cli
 - 新增 20 项测试，覆盖全部十种命令的 undo/redo、跨父分组、空组、浮点精度、未设置样式、IO 屏障、失败回滚、旧文档隔离和连续混合操作；
 - `npm.cmd run cli`：通过，提示骨架可以正常启动；
 - 检查领域层与应用层 import，未出现逆向跨层依赖、终端打印或按图形类型分派。
+
+### 阶段 5 验证记录
+
+验证日期：2026-10-30。
+
+- `npm.cmd test`：通过，70 项测试全部成功，0 项失败；同时通过 TypeScript 严格模式构建；
+- 新增 16 项测试，覆盖分词、六种工厂类型、引号与 Windows 路径、树格式、所有编辑命令反馈、非法输入原子性、显示命令跳过历史和 IO 屏障；
+- 真实 Node 子进程读取流程图脚本并退出，stdout 包含预期层级、中文和 undo 摘要，stderr 为空，退出码为 0；
+- 流式 REPL 测试覆盖 CRLF、注释和错误后继续执行；
+- `read/save` 当前明确返回“阶段 6 实现”，失败不阻断已有 undo/redo，测试中单独验证此阶段边界。

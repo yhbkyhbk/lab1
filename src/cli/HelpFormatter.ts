@@ -1,0 +1,37 @@
+export class HelpFormatter {
+  public format(): string {
+    return [
+      "Document:",
+      "  init [w] [h]                         (defaults: 800x600)",
+      "  read <file.svg>                       (SVG IO: stage 6)",
+      "  save [file.svg]                       (SVG IO: stage 6)",
+      "  canvas [w] [h]",
+      "Edit:",
+      "  create <type> <id> [params...] [in <containerId>]",
+      "    rect    <x> <y> <w> <h> [fill]",
+      "    circle  <cx> <cy> <r> [fill]",
+      "    ellipse <cx> <cy> <rx> <ry> [fill]",
+      "    line    <x1> <y1> <x2> <y2> [stroke]",
+      '    text    <x> <y> "content"',
+      "    g",
+      "  delete <id>",
+      "  move <id> <dx> <dy>",
+      "  scale <id> <factor>",
+      "  set <id> <attr> <value>",
+      "  group <newGid> <id1> <id2>...",
+      "  ungroup <gid>",
+      "  addto <gid> <id>",
+      "  front <id>",
+      "  back <id>",
+      "Display:",
+      "  tree [id]",
+      "  show <id>",
+      "  help",
+      "History:",
+      "  undo",
+      "  redo",
+      "Use double quotes for spaces. Whole lines starting with # are comments.",
+      "EOF (Ctrl+D on Unix, Ctrl+Z then Enter on Windows) exits the REPL.",
+    ].join("\n");
+  }
+}

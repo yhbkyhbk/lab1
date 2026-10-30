@@ -2,6 +2,7 @@ import { DomainError } from "../errors/DomainError.js";
 import { StateMemento } from "../memento/StateMemento.js";
 import type { SvgDocument } from "../SvgDocument.js";
 import type { Group } from "./Group.js";
+import type { ShapeVisitor } from "./ShapeVisitor.js";
 
 export abstract class Shape {
   private readonly shapeId: string;
@@ -14,6 +15,9 @@ export abstract class Shape {
   protected constructor(id: string) {
     if (id.length === 0) {
       throw new DomainError("shape id must not be empty");
+    }
+    if (/\s/.test(id)) {
+      throw new DomainError("shape id must not contain whitespace");
     }
     this.shapeId = id;
   }
@@ -43,6 +47,12 @@ export abstract class Shape {
   }
 
   public abstract get typeName(): string;
+
+  public get children(): readonly Shape[] {
+    return [];
+  }
+
+  public abstract accept<Result>(visitor: ShapeVisitor<Result>): Result;
 
   public captureState(): StateMemento {
     const fill = this.fillValue;

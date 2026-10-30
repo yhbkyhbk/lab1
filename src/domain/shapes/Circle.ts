@@ -1,6 +1,11 @@
 import { Shape } from "./Shape.js";
+import type { ShapeVisitor } from "./ShapeVisitor.js";
 
 export class Circle extends Shape {
+  public override accept<Result>(visitor: ShapeVisitor<Result>): Result {
+    return visitor.visitCircle(this);
+  }
+
   private cxValue: number;
   private cyValue: number;
   private radiusValue: number;

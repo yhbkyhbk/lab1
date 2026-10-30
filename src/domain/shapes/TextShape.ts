@@ -1,6 +1,11 @@
 import { Shape } from "./Shape.js";
+import type { ShapeVisitor } from "./ShapeVisitor.js";
 
 export class TextShape extends Shape {
+  public override accept<Result>(visitor: ShapeVisitor<Result>): Result {
+    return visitor.visitText(this);
+  }
+
   private xValue: number;
   private yValue: number;
   private textValue: string;
